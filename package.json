@@ -6,12 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate": "tsx scripts/generator.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@tailwindcss/typography": "^0.5.19",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
+    "gray-matter": "^4.0.3",
     "next": "16.1.0",
+    "next-mdx-remote": "^5.0.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.0",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

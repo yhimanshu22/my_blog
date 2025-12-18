@@ -15,7 +15,7 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' }); // Using a fast/pro model
+const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); // Using a fast/pro model
 
 const HISTORY_FILE = path.join(process.cwd(), 'history.json');
 const POSTS_DIR = path.join(process.cwd(), 'content', 'posts');

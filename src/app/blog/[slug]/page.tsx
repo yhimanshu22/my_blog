@@ -3,6 +3,7 @@ import { getPostBySlug, getAllPosts } from '@/lib/posts';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import HighlightableArticle from '@/components/HighlightableArticle';
 
 export async function generateStaticParams() {
   const posts = getAllPosts();
@@ -40,7 +41,9 @@ export default async function BlogPost({ params }: Props) {
         prose-a:text-black prose-a:underline prose-a:decoration-gray-300 prose-a:underline-offset-4 hover:prose-a:decoration-black
         prose-blockquote:border-l-4 prose-blockquote:border-gray-900 prose-blockquote:italic prose-blockquote:pl-4
         prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-normal prose-code:before:content-none prose-code:after:content-none">
-        <MDXRemote source={post.content} />
+        <HighlightableArticle slug={slug}>
+          <MDXRemote source={post.content} />
+        </HighlightableArticle>
       </article>
       
       <div className="mt-20 pt-10 border-t border-gray-100">

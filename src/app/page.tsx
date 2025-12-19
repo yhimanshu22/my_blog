@@ -4,8 +4,8 @@ import { getAllPosts } from '@/lib/posts';
 import { siteConfig } from '../../site-config';
 import { format } from 'date-fns';
 
-export default function Home() {
-  const posts = getAllPosts();
+export default async function Home() {
+  const posts = await getAllPosts();
   const { profile } = siteConfig;
 
   return (

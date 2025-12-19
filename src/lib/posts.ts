@@ -1,9 +1,6 @@
 
-import fs from 'fs';
-import path from 'path';
-import matter from 'gray-matter';
-
-const POSTS_DIR = path.join(process.cwd(), 'content', 'posts');
+import connectDB from './db/connect';
+import { Post as PostModel, IPost } from './db/models';
 
 export type Post = {
   slug: string;
@@ -13,30 +10,36 @@ export type Post = {
   content: string;
 };
 
-export function getPostSlugs() {
-  if (!fs.existsSync(POSTS_DIR)) return [];
-  return fs.readdirSync(POSTS_DIR);
+// Now generic to allow sorting or simple retrieval
+export async function getAllPosts(): Promise<Post[]> {
+  console.log("getAllPosts: Connecting to DB...");
+  await connectDB();
+  console.log("getAllPosts: Connected. Querying posts...");
+  const posts = await PostModel.find({}).sort({ date: -1 }).lean();
+  console.log(`getAllPosts: Found ${posts.length} posts.`);
+  
+  return posts.map((post: any) => ({
+    slug: post.slug,
+    title: post.title,
+    date: post.date.toISOString(), // Ensure string format
+    description: post.description || '',
+    content: post.content,
+  }));
 }
 
-export function getPostBySlug(slug: string): Post {
-  const realSlug = slug.replace(/\.mdx$/, '');
-  const fullPath = path.join(POSTS_DIR, `${realSlug}.mdx`);
-  const fileContents = fs.readFileSync(fullPath, 'utf8');
-  const { data, content } = matter(fileContents);
+export async function getPostBySlug(slug: string): Promise<Post> {
+  await connectDB();
+  const post = await PostModel.findOne({ slug }).lean();
+  
+  if (!post) {
+    throw new Error(`Post not found: ${slug}`);
+  }
 
   return {
-    slug: realSlug,
-    title: data.title,
-    date: data.date,
-    description: data.description,
-    content: content,
+    slug: (post as any).slug,
+    title: (post as any).title,
+    date: (post as any).date.toISOString(),
+    description: (post as any).description || '',
+    content: (post as any).content,
   };
-}
-
-export function getAllPosts(): Post[] {
-  const slugs = getPostSlugs();
-  const posts = slugs
-    .map((slug) => getPostBySlug(slug))
-    .sort((post1, post2) => (post1.date > post2.date ? -1 : 1));
-  return posts;
 }

@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen flex flex-col">
+      <body className="min-h-screen flex flex-col" suppressHydrationWarning>
         <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100">
           <div className="max-w-2xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link href="/" className="font-bold text-xl tracking-tight font-sans text-gray-900 hover:text-black">

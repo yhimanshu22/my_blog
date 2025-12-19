@@ -1,13 +1,16 @@
 
-import fs from 'fs';
+import dotenv from 'dotenv';
 import path from 'path';
+
+// Load environment variables from .env.local first
+const envPath = path.join(process.cwd(), '.env.local');
+dotenv.config({ path: envPath });
+
+import fs from 'fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { siteConfig } from '../site-config';
-import dotenv from 'dotenv';
-import matter from 'gray-matter';
-
-// Load environment variables from .env.local
-dotenv.config({ path: '.env.local' });
+import connectDB from '../src/lib/db/connect';
+import { Post } from '../src/lib/db/models';
 
 if (!process.env.GEMINI_API_KEY) {
   console.error('Error: GEMINI_API_KEY is not set in .env.local');
@@ -15,15 +18,9 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); // Using a fast/pro model
+const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 const HISTORY_FILE = path.join(process.cwd(), 'history.json');
-const POSTS_DIR = path.join(process.cwd(), 'content', 'posts');
-
-// Helper: Ensure directory exists
-if (!fs.existsSync(POSTS_DIR)) {
-  fs.mkdirSync(POSTS_DIR, { recursive: true });
-}
 
 // Helper: Read history
 const getHistory = (): string[] => {
@@ -55,6 +52,32 @@ const slugify = (text: string) => {
     .replace(/-+$/, '');      // Trim - from end of text
 };
 
+
+// Helper: Generate with Ollama
+async function generateWithOllama(prompt: string): Promise<string> {
+    try {
+        const response = await fetch('http://localhost:11434/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'qwen2.5:0.5b',
+                prompt: prompt,
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ollama API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.response.trim();
+    } catch (error) {
+        console.error('Ollama generation failed:', error);
+        throw error;
+    }
+}
+
 async function generateTopic(history: string[]) {
   const prompt = `
     You are an expert content strategist for a blog about "${siteConfig.niche}".
@@ -67,8 +90,8 @@ async function generateTopic(history: string[]) {
     Return ONLY the topic title as plain text. No quotes.
   `;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  console.log("Generating topic with Ollama...");
+  return generateWithOllama(prompt);
 }
 
 async function generatePost(topic: string) {
@@ -82,19 +105,19 @@ async function generatePost(topic: string) {
     - Audience: ${siteConfig.targetAudience}
     - Format: Markdown
     - Structure:
-        - Engaging Title (different from the topic if improved)
         - Brief Introduction (Hook)
         - Core Content (3-4 sections with H2 headings)
         - Conclusion (Key takeaways)
     - No filler, no fluff. Concise and insightful.
+    - Do NOT include the title in the output. Start directly with the introduction.
     - Use code blocks if explaining technical concepts.
     - Do NOT wrap the output in markdown code fence (like \`\`\`markdown). Just return the raw markdown content.
   `;
 
-  const result = await model.generateContent(prompt);
-  let content = result.response.text();
+  console.log("Generating content with Ollama...");
+  let content = await generateWithOllama(prompt);
   
-  // Strip markdown fences if Gemini adds them
+  // Strip markdown fences if present
   content = content.replace(/^```markdown\s*/, '').replace(/```$/, '');
   
   return content;
@@ -108,33 +131,39 @@ async function main() {
 
     const content = await generatePost(topic);
     
-    // Generate Frontmatter
-    const date = new Date().toISOString();
+    // Connect to DB
+    console.log("Connecting to DB with URI:", process.env.MONGODB_URI ? "Defined" : "Undefined");
+    await connectDB();
+
     const slug = slugify(topic);
     
-    // Check if we already have this slug (rare collision)
-    if (fs.existsSync(path.join(POSTS_DIR, `${slug}.mdx`))) {
-      console.log('Skipping duplicate slug collision.');
-      return;
+    // Check if duplicate
+    const existing = await Post.findOne({ slug });
+    if (existing) {
+         console.log('Skipping duplicate slug collision.');
+         return;
     }
 
-    const fileContent = `---
-title: "${topic.replace(/"/g, '\\"')}"
-date: "${date}"
-description: "An insightful exploration of ${topic}."
----
-
-${content}
-`;
-
-    fs.writeFileSync(path.join(POSTS_DIR, `${slug}.mdx`), fileContent);
+    // Save to MongoDB
+    await Post.create({
+        title: topic.replace(/"/g, ''),
+        slug: slug,
+        description: `An insightful exploration of ${topic}.`,
+        content: content,
+        date: new Date(),
+        tags: ["AI", "Technology", "Automation"], // Default tags for now
+        isAiGenerated: true
+    });
+    
     addToHistory(topic);
     
-    console.log(`Successfully published: ${slug}.mdx`);
+    console.log(`Successfully published to MongoDB: ${slug}`);
     
   } catch (error) {
     console.error('Automation Failed:', error);
     process.exit(1);
+  } finally {
+      process.exit(0);
   }
 }
 

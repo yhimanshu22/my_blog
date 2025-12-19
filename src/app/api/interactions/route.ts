@@ -1,43 +1,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-
-const DATA_FILE = path.join(process.cwd(), 'data', 'interactions.json');
-
-// Ensure data directory exists
-const ensureDataFile = () => {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    if (!fs.existsSync(DATA_FILE)) {
-        fs.writeFileSync(DATA_FILE, JSON.stringify({}, null, 2));
-    }
-};
-
-interface Highlight {
-    id: string;
-    text: string;
-    range: {
-        startPath: number[];
-        startOffset: number;
-        endPath: number[];
-        endOffset: number;
-    };
-    color?: string;
-    createdAt: number;
-}
-
-interface Interactions {
-    [slug: string]: {
-        highlights: Highlight[];
-    };
-}
+import connectDB from '@/lib/db/connect';
+import { Highlight, IHighlight } from '@/lib/db/models';
 
 export async function GET(req: NextRequest) {
-    ensureDataFile();
-    
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get('slug');
 
@@ -46,11 +12,19 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-        const data: Interactions = JSON.parse(fileContent);
-        const interactions = data[slug] || { highlights: [] };
+        await connectDB();
+        const highlights = await Highlight.find({ articleSlug: slug }).sort({ createdAt: 1 }).lean();
         
-        return NextResponse.json(interactions);
+        // Transform _id to id for frontend if needed, or frontend adapts
+        const formatted = highlights.map((h: any) => ({
+            id: h._id.toString(), // The frontend expects a string ID
+            text: h.text,
+            range: h.range,
+            color: h.color,
+            createdAt: h.createdAt.getTime()
+        }));
+
+        return NextResponse.json({ highlights: formatted });
     } catch (error) {
         console.error('Error reading interactions:', error);
         return NextResponse.json({ error: 'Failed to read data' }, { status: 500 });
@@ -58,8 +32,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    ensureDataFile();
-
     try {
         const body = await req.json();
         const { slug, highlight } = body;
@@ -68,25 +40,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Slug and highlight are required' }, { status: 400 });
         }
 
-        const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-        let data: Interactions = {};
-        try {
-            data = JSON.parse(fileContent);
-        } catch {
-            // If file is empty or corrupted, start fresh
-            data = {};
-        }
+        await connectDB();
 
-        if (!data[slug]) {
-            data[slug] = { highlights: [] };
-        }
+        const newHighlight = await Highlight.create({
+            articleSlug: slug,
+            text: highlight.text,
+            range: highlight.range,
+            color: highlight.color,
+            createdAt: new Date(highlight.createdAt)
+        });
 
-        // Add proper validation here if needed, or check for duplicates
-        data[slug].highlights.push(highlight);
-
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-
-        return NextResponse.json({ success: true, highlight });
+        return NextResponse.json({ success: true, highlight: { ...highlight, id: newHighlight._id.toString() } });
     } catch (error) {
         console.error('Error saving highlight:', error);
         return NextResponse.json({ error: 'Failed to save data' }, { status: 500 });

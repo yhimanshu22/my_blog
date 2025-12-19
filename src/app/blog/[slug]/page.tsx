@@ -6,7 +6,7 @@ import Link from 'next/link';
 import HighlightableArticle from '@/components/HighlightableArticle';
 
 export async function generateStaticParams() {
-  const posts = getAllPosts();
+  const posts = await getAllPosts();
   return posts.map((post) => ({
     slug: post.slug,
   }));
@@ -18,7 +18,7 @@ type Props = {
 
 export default async function BlogPost({ params }: Props) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">

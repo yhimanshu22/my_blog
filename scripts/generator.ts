@@ -96,30 +96,60 @@ async function generateTopic(history: string[]) {
 
 async function generatePost(topic: string) {
   console.log(`Generating content for: "${topic}"...`);
-  
+
   const prompt = `
-    Write a high-quality, professional blog post about "${topic}".
-    
-    Style Guide:
-    - Tone: ${siteConfig.tone}
-    - Audience: ${siteConfig.targetAudience}
-    - Format: Markdown
-    - Structure:
-        - Brief Introduction (Hook)
-        - Core Content (3-4 sections with H2 headings)
-        - Conclusion (Key takeaways)
-    - No filler, no fluff. Concise and insightful.
-    - Do NOT include the title in the output. Start directly with the introduction.
-    - Use code blocks if explaining technical concepts.
-    - Do NOT wrap the output in markdown code fence (like \`\`\`markdown). Just return the raw markdown content.
-  `;
+You are a professional technical writer.
+
+Write a high-quality blog post about the given topic.
+
+IMPORTANT:
+- Do NOT generate a title.
+- Do NOT restate the topic as a heading.
+- Start directly with the introduction paragraph.
+
+Writing style:
+- ${siteConfig.tone}
+- Clear, concise, and insightful
+- Medium.com-style readability
+
+Target audience:
+- ${siteConfig.targetAudience}
+
+Structure (MANDATORY):
+1. Introduction
+   - 2–3 short paragraphs
+   - Strong opening hook
+   - No fluff
+
+2. Main Content
+   - 3 to 4 sections
+   - Use H2 headings (##)
+   - Each section should cover one clear idea
+   - Use examples where helpful
+
+3. Conclusion
+   - Brief and actionable takeaways
+
+Formatting rules:
+- Output Markdown only
+- Do NOT include any title or H1
+- Use code blocks only when technically required
+- Do NOT wrap output in markdown code fences
+- No emojis, hashtags, or promotional language
+- No AI self-references
+
+Quality constraints:
+- No repetition
+- No generic filler
+- Professional and readable
+`;
 
   console.log("Generating content with Ollama...");
   let content = await generateWithOllama(prompt);
-  
-  // Strip markdown fences if present
-  content = content.replace(/^```markdown\s*/, '').replace(/```$/, '');
-  
+
+  // Safety cleanup
+  content = content.replace(/^```[\s\S]*?\n/, '').replace(/```$/, '');
+
   return content;
 }
 

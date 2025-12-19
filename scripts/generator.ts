@@ -9,8 +9,7 @@ dotenv.config({ path: envPath });
 import fs from 'fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { siteConfig } from '../site-config';
-import connectDB from '../src/lib/db/connect';
-import { Post } from '../src/lib/db/models';
+// DB imports moved to dynamic import to avoid hoisting issues
 
 if (!process.env.GEMINI_API_KEY) {
   console.error('Error: GEMINI_API_KEY is not set in .env.local');
@@ -20,24 +19,6 @@ if (!process.env.GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-const HISTORY_FILE = path.join(process.cwd(), 'history.json');
-
-// Helper: Read history
-const getHistory = (): string[] => {
-  if (!fs.existsSync(HISTORY_FILE)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
-  } catch (e) {
-    return [];
-  }
-};
-
-// Helper: Write history
-const addToHistory = (topic: string) => {
-  const history = getHistory();
-  history.push(topic);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
-};
 
 // Helper: Slugify
 const slugify = (text: string) => {
@@ -51,6 +32,7 @@ const slugify = (text: string) => {
     .replace(/^-+/, '')       // Trim - from start of text
     .replace(/-+$/, '');      // Trim - from end of text
 };
+
 
 
 // Helper: Generate with Ollama
@@ -153,18 +135,26 @@ Quality constraints:
   return content;
 }
 
+
+
 async function main() {
   try {
-    const history = getHistory();
+    // Dynamic import to ensure env vars are loaded
+    const { default: connectDB } = await import('../src/lib/db/connect');
+    const { Post } = await import('../src/lib/db/models');
+
+    // Connect to DB first to get history
+    console.log("Connecting to DB...");
+    await connectDB();
+
+    // Get recent topics
+    const posts = await Post.find({}, 'title').sort({ date: -1 }).limit(20);
+    const history = posts.map((p: any) => p.title);
     const topic = await generateTopic(history);
     console.log(`Selected Topic: ${topic}`);
 
     const content = await generatePost(topic);
     
-    // Connect to DB
-    console.log("Connecting to DB with URI:", process.env.MONGODB_URI ? "Defined" : "Undefined");
-    await connectDB();
-
     const slug = slugify(topic);
     
     // Check if duplicate
@@ -184,8 +174,6 @@ async function main() {
         tags: ["AI", "Technology", "Automation"], // Default tags for now
         isAiGenerated: true
     });
-    
-    addToHistory(topic);
     
     console.log(`Successfully published to MongoDB: ${slug}`);
     
